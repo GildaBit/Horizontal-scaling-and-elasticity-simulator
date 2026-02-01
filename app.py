@@ -16,24 +16,36 @@ app = Flask(__name__)
 def burn_cpu(duration=0.1):
     # TODO: Implement a CPU-burning loop that runs for 'duration' seconds
     # 
-    # Tips for making it CPU intensive:
-    # - Check for prime numbers (loop from 2 to sqrt(n))
-    # - Use hashlib.sha256() to hash data repeatedly
-    # - Do math operations like sin(), cos(), pow()
-    # - Use time.time() to check if duration has elapsed
-    #
-    # Example structure:
-    #   end_time = time.time() + duration
-    #   while time.time() < end_time:
-    #       # do CPU intensive work here
-    pass
+    end_time = time.time() + duration
+    iterations = 0
+    while time.time() < end_time:
+        # CPU intensive work: calculating prime numbers
+        n = 10000
+        # loops from 2 to sqrt(n), the possible factors of n
+        for i in range(2, int(math.sqrt(n)) + 1):
+            iterations += 1
+            if n % i == 0:
+                break 
+    return iterations
+        
+
+    
+
 
 @app.route('/work', methods=['POST'])
 def work():
     # TODO: Get 'complexity' from JSON body (default to DEFAULT_COMPLEXITY)
+    complexity = DEFAULT_COMPLEXITY
+    if request.json.get('complexity') is not None:
+        complexity = request.json.get('complexity')
     # TODO: Call burn_cpu() with the complexity value
+    iterations = burn_cpu(complexity)
     # TODO: Return JSON with "worker_id" (hostname) and "result"
-    pass
+    hostname = socket.gethostname()
+    return jsonify({
+        "worker_id": hostname, 
+        "result": iterations
+    })
 
 @app.route('/health', methods=['GET'])
 def health():
