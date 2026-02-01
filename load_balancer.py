@@ -1,4 +1,5 @@
 import requests
+import threading
 from flask import Flask, request, jsonify
 
 # Configuration
@@ -10,13 +11,40 @@ HTTP_STATUS_OK = 200              # Status code ok
 app = Flask(__name__)
 
 # TODO: Initialize a list of active ports
-# active_ports = []
-# current_index = 0
+active_ports = []
+# current port index
+current_index = 0
+# lock for concurrency
+lock = threading.Lock()
 
 @app.route('/register', methods=['POST'])
 def register():
     # TODO: Add port from request body to active_ports list
-    pass
+    bad_request = jsonify({
+            "status": "bad request",
+        }), 400
+    body = request.get_json(silent=True)
+    if body is None:
+        return bad_request
+    if body.get('port') is None:
+        return bad_request
+    port = body.get('port')
+    if not isinstance(port, int) or port <= 0 or port > 65535:
+        return bad_request
+    lock.acquire()
+    try:
+        if port in active_ports:
+            return jsonify({
+            "status": "already registered",
+            "port": port
+        }), 200
+        active_ports.append(port)  
+    finally:
+        lock.release()
+    return jsonify({
+        "status": "registered",
+        "port": port
+    }), 200
 
 @app.route('/deregister', methods=['POST'])
 def deregister():
