@@ -21,8 +21,8 @@ lock = threading.Lock()
 def register():
     # TODO: Add port from request body to active_ports list
     bad_request = jsonify({
-            "status": "bad request",
-        }), 400
+        "status": "bad request",
+    }), 400
     body = request.get_json(silent=True)
     if body is None:
         return bad_request
@@ -35,9 +35,9 @@ def register():
     try:
         if port in active_ports:
             return jsonify({
-            "status": "already registered",
-            "port": port
-        }), 200
+                "status": "already registered",
+                "port": port
+            }), 200
         active_ports.append(port)  
     finally:
         lock.release()
@@ -49,7 +49,36 @@ def register():
 @app.route('/deregister', methods=['POST'])
 def deregister():
     # TODO: Remove port from request body from active_ports list
-    pass
+    bad_request = jsonify({
+        "status": "bad request",
+    }), 400
+    body = request.get_json(silent=True)
+    if body is None:
+        return bad_request
+    if body.get('port') is None:
+        return bad_request
+    port = body.get('port')
+    if not isinstance(port, int) or port <= 0 or port > 65535:
+        return bad_request
+    lock.acquire()
+    removed = False
+    try:
+        if port in active_ports:
+            active_ports.remove(port) 
+            removed = True 
+    finally:
+        lock.release()
+    if removed:
+        return jsonify({
+            "status": "removed",
+            "port": port
+        }), 200
+    else:
+        return jsonify({
+            "status": "unregistered",
+            "port": port
+        }), 200
+
 
 @app.route('/work', methods=['POST'])
 def proxy_work():
