@@ -30,21 +30,92 @@ CONTAINER_PORT = 5000         # Port Flask runs on inside container
 WORKER_START_PORT = 5001      # First host port for workers
 
 # TODO: Initialize Docker client
-# client = docker.from_env()
-# active_containers = {}  # port -> container
+client = docker.from_env()
+active_containers = {}  # port -> container
 
 def start_worker(port):
     # TODO: Use Docker client to run "worker-app" container on specific port
+    try:
+        container = client.containers.run(
+            IMAGE_NAME,
+            detach=True,
+            ports={f'{CONTAINER_PORT}/tcp': port}, 
+        )
+    except docker.errors.DockerException as e:
+        return False 
     # TODO: Register port with Load Balancer
-    pass
+    deadline = time.time() + 5  # wait up to 5 seconds
+    worker_url = f"http://localhost:{port}/health"
+
+    while time.time() < deadline:
+        try:
+            r = requests.get(worker_url, timeout=0.5)
+            # Any HTTP response means the service is reachable
+            break
+        except requests.exceptions.RequestException:
+            time.sleep(0.2)
+    else:
+        # Never became reachable
+        try:
+            container.stop()
+            container.remove()
+        except docker.errors.DockerException:
+            pass
+        return False
+    try:
+        response = requests.post(
+            f"{LB_URL}/register",
+            json={"port": port},
+            timeout=2
+        )
+    except requests.exceptions.RequestException:
+        try:
+            container.stop()
+            container.remove()
+        except docker.errors.DockerException:
+            pass
+        return False
+    if response.ok:
+        active_containers[port] = container
+        return True
+    else:
+        try:
+            container.stop()
+            container.remove()
+        except docker.errors.DockerException:
+            pass
+        return False
 
 def stop_worker(port):
     # TODO: Deregister from Load Balancer
-    # TODO: Stop and remove container
-    pass
+    container = active_containers.get(port)
+    if container is None
+        return
+    
+    try:
+        response = requests.post(
+            f"{LB_URL}/deregister",
+            json={"port": port},
+            timeout=2
+        )
+    except requests.exceptions.RequestException:
+        pass
+
+    try:
+        container.stop(timeout=5)
+    except docker.errors.DockerException:
+        pass
+    
+    try:
+        container.remove(force=True)
+    except docker.errors.DockerException:
+        pass
+    
+    active_containers.remove(port, None)
 
 def monitor():
     # TODO: Infinite loop
+    while (True):
     # 1. Calculate average response time of Load Balancer
     # 2. Check scale up condition
     # 3. Check scale down condition
