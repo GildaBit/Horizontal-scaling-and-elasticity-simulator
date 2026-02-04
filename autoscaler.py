@@ -115,15 +115,64 @@ def stop_worker(port):
 
 def monitor():
     # TODO: Infinite loop
+    most_recent_scale = 0
     while (True):
-    # 1. Calculate average response time of Load Balancer
-    # 2. Check scale up condition
-    # 3. Check scale down condition
-    # 4. Respect cooldown period
-    pass
+        # 1. Calculate average response time of Load Balancer
+        samples = 10
+        latencies = []
+        for _ in range(samples):
+            benchmark = time.perf_counter() #time.time() but more precise
+            try:
+                request = requests.post(f"{LB_URL}/work", json={}, timeout=10)
+                latencies.append(time.perf_counter() - benchmark)
+            except requests.exceptions.RequestException
+                pass
+
+        avg = None
+        if latencies:
+            avg = sum(latencies) / len(latencies)
+
+        now = time.time()
+        in_cooldown = (now - most_recent_scale) < COOLDOWN_PERIOD
+        if not in_cooldown and avg is not None:
+            num_workers = len(active_containers)
+
+            # 2. Check scale up condition
+            if avg > SCALE_UP_THRESHOLD and num_workers < MAX_WORKERS:
+                port = WORKER_START_PORT
+                while port in active_containers:
+                    port += 1
+
+                if start_worker(port):
+                    most_recent_scale = time.time()
+
+            # 3. Check scale down condition
+            elif avg < SCALE_DOWN_THRESHOLD and num_workers > MIN_WORKERS:
+                port = max(active_containers.keys())
+                stop_worker(port)
+                most_recent_scale = time.time()
+            
+        time.sleep(CHECK_INTERVAL)
 
 if __name__ == "__main__":
     # TODO: Build Docker image first
+    try:
+        print("Building Docker image...")
+        client.images.build(
+            path=".", # current directory
+            tag=IMAGE_NAME,
+            rm=True # remove intermediate containers
+        )
+        print("Docker image built successfully")
+    except docker.errors.BuildError as e:
+        print("Docker image build failed:", e)
+        exit(1)
+    except docker.errors.APIError as e:
+        print("Docker API error:", e)
+        exit(1)
+
     # TODO: Start initial worker
+    start_worker(WORKER_START_PORT)
     # TODO: Start monitoring loop
-    pass
+    monitor()
+
