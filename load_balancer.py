@@ -107,9 +107,7 @@ def proxy_work():
             if current_index >= len(active_ports) or current_index < 0:
                 current_index = 0
             if not active_ports:
-                return jsonify({
-                    "status": "Service unavailable",
-                }), 503
+                break 
             port = active_ports[current_index]
             current_index = (current_index + 1) % len(active_ports)
         finally:
@@ -125,7 +123,8 @@ def proxy_work():
         except ValueError:
             return response.text, response.status_code
         # In case of a worker being down
-        except requests.exceptions.RequestException as e:
+        except requests.exceptions.ConnectionError:
+            print(f"Worker at {port} connection failed. Removing.")
             lock.acquire()
             try:
                 if port in active_ports:
@@ -136,7 +135,9 @@ def proxy_work():
                         current_index = 0
             finally:
                 lock.release()
-        
+            continue # keep trying other workers (resilience)
+        except requests.exceptions.Timeout:
+            continue # keep trying other workers (resilience)
     return jsonify({
         "status": "Bad gateway"
     }), 502

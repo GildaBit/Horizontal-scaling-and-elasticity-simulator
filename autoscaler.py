@@ -89,7 +89,7 @@ def start_worker(port):
 def stop_worker(port):
     # TODO: Deregister from Load Balancer
     container = active_containers.get(port)
-    if container is None
+    if container is None:
         return
     
     try:
@@ -111,7 +111,7 @@ def stop_worker(port):
     except docker.errors.DockerException:
         pass
     
-    active_containers.remove(port, None)
+    active_containers.pop(port, None)
 
 def monitor():
     # TODO: Infinite loop
@@ -125,18 +125,57 @@ def monitor():
             try:
                 request = requests.post(f"{LB_URL}/work", json={}, timeout=10)
                 latencies.append(time.perf_counter() - benchmark)
-            except requests.exceptions.RequestException
+            except requests.exceptions.RequestException:
                 pass
 
         avg = None
         if latencies:
             avg = sum(latencies) / len(latencies)
 
+        for port, container in list(active_containers.items()):
+            try:
+                container.reload()
+                if container.status != "running":
+                    # Tell LB to forget this worker
+                    try:
+                        requests.post(
+                            f"{LB_URL}/deregister",
+                            json={"port": port},
+                            timeout=2
+                        )
+                    except requests.exceptions.RequestException:
+                        pass  # LB might already have removed it
+
+                    active_containers.pop(port, None)
+
+            except docker.errors.DockerException:
+                # Container is gone / unreachable
+                try:
+                    requests.post(
+                        f"{LB_URL}/deregister",
+                        json={"port": port},
+                        timeout=2
+                    )
+                except requests.exceptions.RequestException:
+                    pass
+
+                active_containers.pop(port, None)
+
+        if avg is None:
+            print(
+                f"[AUTOSCALER] avg_latency=N/A workers={num_workers} samples=0",
+                flush=True
+            )
+        else:
+            print(
+                f"[AUTOSCALER] avg_latency={avg:.3f}s workers={num_workers} samples={len(latencies)}",
+                flush=True
+            )
+
+
         now = time.time()
         in_cooldown = (now - most_recent_scale) < COOLDOWN_PERIOD
         if not in_cooldown and avg is not None:
-            num_workers = len(active_containers)
-
             # 2. Check scale up condition
             if avg > SCALE_UP_THRESHOLD and num_workers < MAX_WORKERS:
                 port = WORKER_START_PORT
