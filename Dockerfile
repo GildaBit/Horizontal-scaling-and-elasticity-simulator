@@ -1,3 +1,6 @@
+# AUTHOR: Gilad Bitton
+# RedID: 130621085
+
 # TODO: Use python:3.10-slim as base image
 FROM python:3.10-slim
 

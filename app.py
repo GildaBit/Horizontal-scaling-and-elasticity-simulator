@@ -1,3 +1,6 @@
+# AUTHOR: Gilad Bitton
+# RedID: 130621085
+
 import time
 import math
 import os
@@ -13,11 +16,12 @@ HTTP_STATUS_OK = 200      # Status code ok
 
 app = Flask(__name__)
 
+# Function to burn CPU for a specified duration
 def burn_cpu(duration=0.1):
-    # TODO: Implement a CPU-burning loop that runs for 'duration' seconds
-    # 
+    # Calculate the end time based on current time and duration
     end_time = time.time() + duration
     iterations = 0
+    # Loop until the specified duration has passed
     while time.time() < end_time:
         # CPU intensive work: calculating prime numbers
         n = 10000
@@ -31,21 +35,20 @@ def burn_cpu(duration=0.1):
 
     
 
-
+# Endpoint to handle work requests
 @app.route('/work', methods=['POST'])
 def work():
-    # TODO: Get 'complexity' from JSON body (default to DEFAULT_COMPLEXITY)
-    complexity = DEFAULT_COMPLEXITY
-    if request.json.get('complexity') is not None:
-        complexity = request.json.get('complexity')
-    # TODO: Call burn_cpu() with the complexity value
+    # Get 'complexity' from JSON body (default to DEFAULT_COMPLEXITY)
+    payload = request.get_json(silent=True) or {}
+    complexity = payload.get("complexity", DEFAULT_COMPLEXITY)
+    # Call burn_cpu() with the complexity value
     iterations = burn_cpu(complexity)
-    # TODO: Return JSON with "worker_id" (hostname) and "result"
+    # Return JSON with "worker_id" (hostname) and "result"
     hostname = socket.gethostname()
     return jsonify({
         "worker_id": hostname, 
         "result": iterations
-    })
+    }), HTTP_STATUS_OK
 
 @app.route('/health', methods=['GET'])
 def health():
